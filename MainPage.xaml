@@ -1,138 +1,430 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="XmlDormitoryApp.DormitoryView"
-             BackgroundColor="#F8FAFC"
-             Title="XML Диспетчер Гуртожитку">
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Xml.Linq;
+using Microsoft.Maui.Controls;
 
-    <Grid RowDefinitions="Auto, Auto, Auto, *" Padding="16" RowSpacing="12">
+namespace XmlDormitoryApp;
 
-        <!-- 1. Верхня панель інструментів (FlexLayout з Wrap="Wrap") -->
-        <Border Grid.Row="0" Stroke="#E2E8F0" StrokeThickness="1" BackgroundColor="#FFFFFF" StrokeShape="RoundRectangle 12" Padding="12">
-            <FlexLayout Wrap="Wrap" JustifyContent="SpaceBetween" AlignItems="Center">
-                <HorizontalStackLayout Spacing="8">
-                    <Button Text="Відкрити XML" Clicked="OnSelectFileClicked" BackgroundColor="#E0E7FF" TextColor="#3730A3" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
-                    <Button Text="Зберегти XML" Clicked="OnSaveFilteredClicked" BackgroundColor="#D1FAE5" TextColor="#065F46" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
-                    <Button Text="В HTML (XSLT)" Clicked="OnTransformClicked" BackgroundColor="#E0E7FF" TextColor="#3730A3" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
-                    <Button Text="+ Додати запис" Clicked="OnAddStudentClicked" BackgroundColor="#D1FAE5" TextColor="#065F46" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
-                </HorizontalStackLayout>
+public partial class DormitoryView : ContentPage
+{
+    private string _xmlFilePath = string.Empty;
+    private string _xslFilePath = string.Empty;
+    private string _htmlFilePath = string.Empty;
+    private string _reportSourcePath = string.Empty;   // тимчасовий XML з поточними (відфільтрованими) записами для XSLT
 
-                <HorizontalStackLayout Spacing="8">
-                    <Button Text="Довідка" Clicked="OnAboutClicked" BackgroundColor="#FEF3C7" TextColor="#92400E" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
-                    <Button Text="Вийти" Clicked="OnExitClicked" BackgroundColor="#FEE2E2" TextColor="#991B1B" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
-                </HorizontalStackLayout>
-            </FlexLayout>
-        </Border>
+    private readonly XmlProcessor _processor;
+    private readonly XmlTransformer _transformer;
 
-        <!-- 2. Картка пошуку та налаштувань Strategy -->
-        <Border Grid.Row="1" Stroke="#E2E8F0" StrokeThickness="1" BackgroundColor="#FFFFFF" StrokeShape="RoundRectangle 12" Padding="14">
-            <VerticalStackLayout Spacing="10">
+    // Списки для звичайного та каскадного пошуку.
+    // _displayedStudents ЗАВЖДИ містить ті самі об'єкти, що й _allStudents (а не їхні копії),
+    // тому редагування/видалення з таблиці коректно змінює головний список і файл.
+    private List<Student> _allStudents = new List<Student>();
+    private List<Student> _displayedStudents = new List<Student>();
+    private readonly List<string> _activeFilterSteps = new List<string>();
 
-                <!-- Рядок вибору стратегії парсингу -->
-                <HorizontalStackLayout Spacing="16" VerticalOptions="Center">
-                    <Label Text="Парсер (Strategy):" FontAttributes="Bold" TextColor="#4C1D95" VerticalOptions="Center" FontSize="13" />
-                    <HorizontalStackLayout Spacing="4">
-                        <RadioButton x:Name="rbLinq" IsChecked="True" GroupName="ParserMethods" />
-                        <Label Text="LINQ to XML" VerticalOptions="Center" TextColor="#1E293B" FontSize="13"/>
-                    </HorizontalStackLayout>
-                    <HorizontalStackLayout Spacing="4">
-                        <RadioButton x:Name="rbDom" GroupName="ParserMethods" />
-                        <Label Text="DOM (XmlDocument)" VerticalOptions="Center" TextColor="#1E293B" FontSize="13"/>
-                    </HorizontalStackLayout>
-                    <HorizontalStackLayout Spacing="4">
-                        <RadioButton x:Name="rbSax" GroupName="ParserMethods" />
-                        <Label Text="SAX (XmlReader)" VerticalOptions="Center" TextColor="#1E293B" FontSize="13"/>
-                    </HorizontalStackLayout>
-                </HorizontalStackLayout>
+    public DormitoryView()
+    {
+        InitializeComponent();
 
-                <!-- Рядок фільтрації з підгрузкою наявних значень -->
-                <Grid ColumnDefinitions="160, 200, *, Auto, Auto" ColumnSpacing="8">
-                    <Picker x:Name="pickerAttribute"
-                        Title="Оберіть критерій"
-                        SelectedIndexChanged="OnAttributeChanged"
-                        TextColor="#0F172A"
-                        TitleColor="#64748B"
-                        BackgroundColor="#F1F5F9"
-                        FontSize="13">
-                        <Picker.Items>
-                            <x:String>ПІБ</x:String>
-                            <x:String>Факультет</x:String>
-                            <x:String>Курс</x:String>
-                            <x:String>Номер кімнати</x:String>
-                            <x:String>Кафедра</x:String>
-                            <x:String>Дата поселення</x:String>
-                        </Picker.Items>
-                    </Picker>
-                    <Picker x:Name="pickerSearchValue"
-                        Title="Наявні у файлі..."
-                        SelectedIndexChanged="OnSearchValuePicked"
-                        Grid.Column="1"
-                        TextColor="#0F172A"
-                        TitleColor="#64748B"
-                        BackgroundColor="#F1F5F9"
-                        FontSize="13" />
-                    <Entry x:Name="entrySearchValue" Placeholder="Або введіть значення..." Grid.Column="2" BackgroundColor="#F8FAFC" TextColor="#1E293B" FontSize="13" />
-                    <Button Text="Пошук" Clicked="OnSearchClicked" Grid.Column="3" BackgroundColor="#E0E7FF" TextColor="#3730A3" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
-                    <Button Text="Скинути" Clicked="OnClearClicked" Grid.Column="4" BackgroundColor="#FEE2E2" TextColor="#991B1B" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
-                </Grid>
+        _processor = new XmlProcessor(new LinqSearchStrategy());
+        _transformer = new XmlTransformer();
+        pickerAttribute.SelectedIndex = 0;
 
-                <!-- Рядок каскаду та лічильник -->
-                <Grid ColumnDefinitions="Auto, *" VerticalOptions="Center">
-                    <HorizontalStackLayout Spacing="6" VerticalOptions="Center">
-                        <CheckBox x:Name="cbCascade" IsChecked="False" Color="#3730A3" VerticalOptions="Center" />
-                        <Label Text="Шукати серед уже відфільтрованих результатів (каскад)" VerticalOptions="Center" TextColor="#475569" FontSize="12" />
-                    </HorizontalStackLayout>
-                    <Label x:Name="labelCount" Text="Записів: 0" Grid.Column="1" HorizontalOptions="End" FontAttributes="Bold" TextColor="#3730A3" FontSize="13" VerticalOptions="Center" />
-                </Grid>
+        _xslFilePath = Path.Combine(FileSystem.AppDataDirectory, "transform.xsl");
+        _htmlFilePath = Path.Combine(FileSystem.AppDataDirectory, "dormitory.html");
+        _reportSourcePath = Path.Combine(FileSystem.AppDataDirectory, "report_source.xml");
 
-                <!-- Рядок активних фільтрів -->
-                <HorizontalStackLayout Spacing="6">
-                    <Label Text="Активні фільтри:" FontAttributes="Bold" TextColor="#64748B" FontSize="12" />
-                    <Label x:Name="labelActiveFilters" Text="Немає" TextColor="#2563EB" FontSize="12" />
-                </HorizontalStackLayout>
-            </VerticalStackLayout>
-        </Border>
+        EnsureXslFileExists();
+    }
 
-        <!-- 3. Шапка таблиці -->
-        <Border Grid.Row="2" Stroke="#E2E8F0" StrokeThickness="1" BackgroundColor="#EDE9FE" StrokeShape="RoundRectangle 8" Padding="12, 10">
-            <Grid ColumnDefinitions="2.2*, 1.4*, 0.8*, 1.1*, 1.6*, 1.2*">
-                <Label Text="ПІБ студента" FontAttributes="Bold" TextColor="#4C1D95" FontSize="13" Grid.Column="0" />
-                <Label Text="Факультет" FontAttributes="Bold" TextColor="#4C1D95" FontSize="13" Grid.Column="1" />
-                <Label Text="Курс" FontAttributes="Bold" TextColor="#4C1D95" FontSize="13" Grid.Column="2" />
-                <Label Text="Кімната" FontAttributes="Bold" TextColor="#4C1D95" FontSize="13" Grid.Column="3" />
-                <Label Text="Кафедра" FontAttributes="Bold" TextColor="#4C1D95" FontSize="13" Grid.Column="4" />
-                <Label Text="Дії" FontAttributes="Bold" TextColor="#4C1D95" FontSize="13" HorizontalOptions="Center" Grid.Column="5" />
-            </Grid>
-        </Border>
+    private void EnsureXslFileExists()
+    {
+        if (!File.Exists(_xslFilePath))
+        {
+            File.WriteAllText(_xslFilePath, @"<?xml version=""1.0"" encoding=""utf-8""?>
+<xsl:stylesheet version=""1.0"" xmlns:xsl=""http://www.w3.org/1999/XSL/Transform"">
+  <xsl:template match=""/"">
+    <html>
+      <head>
+        <meta charset=""utf-8"" />
+        <title>Список мешканців гуртожитку</title>
+        <style>
+          body { font-family: sans-serif; background: #F8FAFC; padding: 20px; }
+          table { border-collapse: collapse; width: 100%; background: white; border-radius: 8px; }
+          th { background: #EDE9FE; color: #4C1D95; padding: 10px; text-align: left; }
+          td { border-bottom: 1px solid #E2E8F0; padding: 10px; }
+        </style>
+      </head>
+      <body>
+        <h2>Мешканці гуртожитку</h2>
+        <table>
+          <tr><th>ПІБ</th><th>Факультет</th><th>Курс</th><th>Кімната</th><th>Кафедра</th></tr>
+          <xsl:for-each select=""Dormitory/Student"">
+            <tr>
+              <td><xsl:value-of select=""FullName""/></td>
+              <td><xsl:value-of select=""Faculty""/></td>
+              <td><xsl:value-of select=""Course""/></td>
+              <td><xsl:value-of select=""Room""/></td>
+              <td><xsl:value-of select=""Department""/></td>
+            </tr>
+          </xsl:for-each>
+        </table>
+      </body>
+    </html>
+  </xsl:template>
+</xsl:stylesheet>");
+        }
+    }
 
-        <!-- 4. Список записів (CollectionView) -->
-        <CollectionView x:Name="collectionStudents" Grid.Row="3" SelectionMode="None">
-            <CollectionView.EmptyView>
-                <VerticalStackLayout Spacing="8" HorizontalOptions="Center" VerticalOptions="Center" Margin="0, 40">
-                    <Label Text="Записів не знайдено або файл ще не обрано" TextColor="#94A3B8" FontSize="14" HorizontalOptions="Center" />
-                    <Label Text="Натисніть «Відкрити XML», щоб розпочати роботу" TextColor="#CBD5E1" FontSize="12" HorizontalOptions="Center" />
-                </VerticalStackLayout>
-            </CollectionView.EmptyView>
-            <CollectionView.ItemTemplate>
-                <DataTemplate>
-                    <Border Stroke="#E2E8F0" StrokeThickness="1" BackgroundColor="#FFFFFF" StrokeShape="RoundRectangle 8" Padding="12, 8" Margin="0, 3">
-                        <Grid ColumnDefinitions="2.2*, 1.4*, 0.8*, 1.1*, 1.6*, 1.2*" VerticalOptions="Center">
-                            <Label Text="{Binding FullName}" FontAttributes="Bold" TextColor="#1E293B" FontSize="13" Grid.Column="0" VerticalOptions="Center" />
-                            <Label Text="{Binding Faculty}" TextColor="#2563EB" FontAttributes="Bold" FontSize="13" Grid.Column="1" VerticalOptions="Center" />
-                            <Label Text="{Binding Course}" TextColor="#475569" FontSize="13" Grid.Column="2" VerticalOptions="Center" />
-                            <Label Text="{Binding Room}" TextColor="#059669" FontAttributes="Bold" FontSize="13" Grid.Column="3" VerticalOptions="Center" />
-                            <Label Text="{Binding Department}" TextColor="#475569" FontSize="12" Grid.Column="4" VerticalOptions="Center" />
+    private void RefreshStrategy()
+    {
+        if (rbLinq.IsChecked) _processor.SetStrategy(new LinqSearchStrategy());
+        else if (rbDom.IsChecked) _processor.SetStrategy(new DomSearchStrategy());
+        else if (rbSax.IsChecked) _processor.SetStrategy(new SaxSearchStrategy());
+    }
 
-                            <!-- Кнопки дій Ред. та Вид. -->
-                            <HorizontalStackLayout Grid.Column="5" Spacing="4" HorizontalOptions="Center" VerticalOptions="Center">
-                                <Button Text="Ред." Clicked="OnEditStudentClicked" CommandParameter="{Binding .}" BackgroundColor="#E0E7FF" TextColor="#3730A3" FontSize="11" CornerRadius="6" HeightRequest="28" Padding="6, 0" />
-                                <Button Text="Вид." Clicked="OnDeleteStudentClicked" CommandParameter="{Binding .}" BackgroundColor="#FEE2E2" TextColor="#991B1B" FontSize="11" CornerRadius="6" HeightRequest="28" Padding="6, 0" />
-                            </HorizontalStackLayout>
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+    // СИНХРОНІЗАЦІЯ ЗМІН ІЗ ПОТОЧНИМ XML-ФАЙЛОМ НА ДИСКУ
+    private void SaveAllToCurrentFile()
+    {
+        if (string.IsNullOrEmpty(_xmlFilePath)) return;
+        BuildXml(_allStudents).Save(_xmlFilePath);
+    }
 
-    </Grid>
-</ContentPage>
+    // Єдине місце, де список студентів перетворюється на XML (використовується для файлу, експорту та звіту)
+    private static XDocument BuildXml(IEnumerable<Student> students)
+    {
+        return new XDocument(
+            new XElement("Dormitory",
+                students.Select(s => new XElement("Student",
+                    new XElement("FullName", s.FullName),
+                    new XElement("Faculty", s.Faculty),
+                    new XElement("Course", s.Course),
+                    new XElement("Room", s.Room),
+                    new XElement("Department", s.Department),
+                    new XElement("CheckInDate", s.CheckInDate),
+                    new XElement("CheckOutDate", s.CheckOutDate)
+                ))
+            )
+        );
+    }
+
+    // Порівняння двох записів за вмістом (стратегії створюють нові об'єкти при кожному читанні файлу)
+    private static bool IsSameStudent(Student a, Student b)
+    {
+        return a.FullName == b.FullName
+            && a.Faculty == b.Faculty
+            && a.Course == b.Course
+            && a.Room == b.Room
+            && a.Department == b.Department
+            && a.CheckInDate == b.CheckInDate
+            && a.CheckOutDate == b.CheckOutDate;
+    }
+
+    // ПІДГРУЗКА УНІКАЛЬНИХ ЗНАЧЕНЬ ІЗ ВІДКРИТОГО ФАЙЛУ
+    private void UpdateAvailableValues()
+    {
+        if (_allStudents == null || _allStudents.Count == 0)
+        {
+            pickerSearchValue.ItemsSource = null;
+            return;
+        }
+
+        string selectedUa = pickerAttribute.SelectedItem?.ToString() ?? "ПІБ";
+
+        var values = _allStudents
+            .Select(s => selectedUa switch
+            {
+                "ПІБ" => s.FullName,
+                "Факультет" => s.Faculty,
+                "Курс" => s.Course > 0 ? s.Course.ToString() : string.Empty,
+                "Номер кімнати" => s.Room > 0 ? s.Room.ToString() : string.Empty,
+                "Кафедра" => s.Department,
+                "Дата поселення" => s.CheckInDate,
+                _ => string.Empty
+            })
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct()
+            .OrderBy(v => int.TryParse(v, out int n) ? n : int.MaxValue)   // числа — за значенням (2 < 10 < 105)
+            .ThenBy(v => v)                                                 // текст — за алфавітом
+            .ToList();
+
+        pickerSearchValue.ItemsSource = values;
+        pickerSearchValue.SelectedIndex = -1;
+    }
+
+    private void OnAttributeChanged(object? sender, EventArgs e)
+    {
+        UpdateAvailableValues();
+    }
+
+    private void OnSearchValuePicked(object? sender, EventArgs e)
+    {
+        if (pickerSearchValue.SelectedItem is string val && !string.IsNullOrEmpty(val))
+        {
+            entrySearchValue.Text = val;
+        }
+    }
+
+    // 1. ВИБІР ВХІДНОГО XML-ФАЙЛУ
+    public async void OnSelectFileClicked(object sender, EventArgs e)
+    {
+        try
+        {
+            var customXmlType = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
+            {
+                { DevicePlatform.WinUI, new[] { ".xml" } },
+                { DevicePlatform.macOS, new[] { "xml" } },
+                { DevicePlatform.Android, new[] { "text/xml", "application/xml" } }
+            });
+
+            var result = await FilePicker.Default.PickAsync(new PickOptions
+            {
+                PickerTitle = "Оберіть XML-файл гуртожитку",
+                FileTypes = customXmlType
+            });
+
+            if (result != null)
+            {
+                _xmlFilePath = result.FullPath;
+                RefreshStrategy();
+                _allStudents = _processor.Search(_xmlFilePath, new SearchCriteria("", ""));
+                _displayedStudents = new List<Student>(_allStudents);
+                _activeFilterSteps.Clear();
+                UpdateAvailableValues();
+                UpdateTable();
+            }
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlertAsync("Помилка", ex.Message, "OK");
+        }
+    }
+
+    // 2. ФІЛЬТРАЦІЯ (ЗВИЧАЙНА ТА КАСКАДНА)
+    public async void OnSearchClicked(object sender, EventArgs e)
+    {
+        if (string.IsNullOrEmpty(_xmlFilePath) || !File.Exists(_xmlFilePath))
+        {
+            await DisplayAlertAsync("Увага", "Будь ласка, спочатку відкрийте XML-файл!", "OK");
+            return;
+        }
+
+        RefreshStrategy();
+
+        string selectedUa = pickerAttribute.SelectedItem?.ToString() ?? "Факультет";
+        string attr = selectedUa switch
+        {
+            "ПІБ" => "FullName",
+            "Факультет" => "Faculty",
+            "Курс" => "Course",
+            "Номер кімнати" => "Room",
+            "Кафедра" => "Department",
+            "Дата поселення" => "CheckInDate",
+            _ => selectedUa
+        };
+
+        string val = entrySearchValue.Text?.Trim() ?? "";
+
+        if (string.IsNullOrEmpty(val))
+        {
+            await DisplayAlertAsync("Підказка", "Оберіть або введіть значення для пошуку", "OK");
+            return;
+        }
+
+        var criteria = new SearchCriteria(attr, val);
+
+        if (cbCascade.IsChecked)
+        {
+            _displayedStudents = _displayedStudents.Where(s => criteria.Matches(s)).ToList();
+            _activeFilterSteps.Add($"{selectedUa}='{val}'");
+        }
+        else
+        {
+            // Пошук виконує обрана стратегія (LINQ / DOM / SAX) безпосередньо по XML-файлу.
+            // Стратегія повертає НОВІ об'єкти, тому зіставляємо знайдені записи з об'єктами в пам'яті:
+            // так у таблиці будуть ті самі екземпляри, що й у _allStudents, і редагування/видалення
+            // після пошуку коректно потрапить у файл.
+            List<Student> found = _processor.Search(_xmlFilePath, criteria);
+            _displayedStudents = _allStudents
+                .Where(a => found.Any(f => IsSameStudent(a, f)))
+                .ToList();
+            _activeFilterSteps.Clear();
+            _activeFilterSteps.Add($"{selectedUa}='{val}'");
+        }
+
+        UpdateTable();
+    }
+
+    // 3. СКИДАННЯ ФІЛЬТРІВ
+    public void OnClearClicked(object sender, EventArgs e)
+    {
+        entrySearchValue.Text = string.Empty;
+        pickerSearchValue.SelectedIndex = -1;
+        _activeFilterSteps.Clear();
+        _displayedStudents = new List<Student>(_allStudents);
+        UpdateTable();
+    }
+
+    private void UpdateTable()
+    {
+        collectionStudents.ItemsSource = null;
+        collectionStudents.ItemsSource = _displayedStudents;
+        labelCount.Text = $"Записів: {_displayedStudents.Count}";
+        labelActiveFilters.Text = _activeFilterSteps.Count > 0 ? string.Join(" ➔ ", _activeFilterSteps) : "Немає";
+    }
+
+    // 4. ЗБЕРЕЖЕННЯ ВІДФІЛЬТРОВАНОГО XML
+    public async void OnSaveFilteredClicked(object sender, EventArgs e)
+    {
+        if (_displayedStudents.Count == 0)
+        {
+            await DisplayAlertAsync("Увага", "Немає записів для збереження!", "OK");
+            return;
+        }
+
+        string fileName = await DisplayPromptAsync("Збереження XML", "Введіть ім'я нового файлу:", initialValue: "filtered_dormitory.xml");
+        if (string.IsNullOrWhiteSpace(fileName)) return;
+
+        if (!fileName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)) fileName += ".xml";
+
+        string targetDir = Path.GetDirectoryName(_xmlFilePath);
+        if (string.IsNullOrEmpty(targetDir)) targetDir = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+
+        string fullPath = Path.Combine(targetDir, fileName);
+
+        BuildXml(_displayedStudents).Save(fullPath);
+        await DisplayAlertAsync("Успіх", $"Файл успішно збережено за адресою:\n{fullPath}", "OK");
+    }
+
+    // 5. XSLT-ТРАНСФОРМАЦІЯ В HTML
+    public async void OnTransformClicked(object sender, EventArgs e)
+    {
+        if (string.IsNullOrEmpty(_xmlFilePath))
+        {
+            await DisplayAlertAsync("Увага", "Спочатку відкрийте файл!", "OK");
+            return;
+        }
+
+        if (_displayedStudents.Count == 0)
+        {
+            await DisplayAlertAsync("Увага", "Немає записів для звіту!", "OK");
+            return;
+        }
+
+        try
+        {
+            // Звіт будується з того, що зараз у таблиці (з урахуванням фільтрів):
+            // записуємо поточні записи в тимчасовий XML і трансформуємо його через XSLT.
+            BuildXml(_displayedStudents).Save(_reportSourcePath);
+            _transformer.TransformToHtml(_reportSourcePath, _xslFilePath, _htmlFilePath);
+
+            bool open = await DisplayAlertAsync("Успіх XSLT",
+                $"HTML-звіт ({_displayedStudents.Count} записів) збережено:\n{_htmlFilePath}\n\nВідкрити його в браузері?",
+                "Відкрити", "Закрити");
+
+            if (open)
+            {
+                await Launcher.Default.OpenAsync(new OpenFileRequest("HTML-звіт", new ReadOnlyFile(_htmlFilePath)));
+            }
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlertAsync("Помилка", ex.Message, "OK");
+        }
+    }
+
+    // 6. ДОДАВАННЯ СТУДЕНТА ЧЕРЕЗ EditStudentPage
+    public async void OnAddStudentClicked(object sender, EventArgs e)
+    {
+        if (string.IsNullOrEmpty(_xmlFilePath))
+        {
+            await DisplayAlertAsync("Увага", "Спочатку відкрийте XML-файл, до якого додати запис!", "OK");
+            return;
+        }
+
+        var editPage = new EditStudentPage(student: null, isNew: true);
+        editPage.Disappearing += (s, args) =>
+        {
+            if (editPage.StudentData != null && !string.IsNullOrWhiteSpace(editPage.StudentData.FullName))
+            {
+                _allStudents.Add(editPage.StudentData);
+                _activeFilterSteps.Clear();
+                _displayedStudents = new List<Student>(_allStudents);
+                SaveAllToCurrentFile();
+                UpdateAvailableValues();
+                UpdateTable();
+            }
+        };
+        await Navigation.PushModalAsync(editPage);
+    }
+
+    // 7. РЕДАГУВАННЯ ЧЕРЕЗ EditStudentPage
+    public async void OnEditStudentClicked(object sender, EventArgs e)
+    {
+        if (sender is Button btn && btn.CommandParameter is Student student)
+        {
+            var editPage = new EditStudentPage(student: student, isNew: false);
+            editPage.Disappearing += (s, args) =>
+            {
+                if (editPage.IsDeleteRequested)
+                {
+                    _allStudents.Remove(student);
+                    _displayedStudents.Remove(student);
+                    SaveAllToCurrentFile();
+                    UpdateAvailableValues();
+                    UpdateTable();
+                }
+                else if (editPage.StudentData != null)
+                {
+                    int idxAll = _allStudents.IndexOf(student);
+                    if (idxAll >= 0) _allStudents[idxAll] = editPage.StudentData;
+
+                    int idxDisp = _displayedStudents.IndexOf(student);
+                    if (idxDisp >= 0) _displayedStudents[idxDisp] = editPage.StudentData;
+
+                    SaveAllToCurrentFile();
+                    UpdateAvailableValues();
+                    UpdateTable();
+                }
+            };
+            await Navigation.PushModalAsync(editPage);
+        }
+    }
+
+    public async void OnDeleteStudentClicked(object sender, EventArgs e)
+    {
+        if (sender is Button btn && btn.CommandParameter is Student student)
+        {
+            bool confirm = await DisplayAlertAsync("Видалення", $"Видалити студента {student.FullName}?", "Так", "Ні");
+            if (confirm)
+            {
+                _allStudents.Remove(student);
+                _displayedStudents.Remove(student);
+                SaveAllToCurrentFile();
+                UpdateAvailableValues();
+                UpdateTable();
+            }
+        }
+    }
+
+    // 8. ДОВІДКА ТА ВИХІД
+    public async void OnAboutClicked(object sender, EventArgs e)
+    {
+        await DisplayAlertAsync("Про програму",
+            "Лабораторна робота №2 з ООП\n" +
+            "Тема: «Аналіз XML-документів» (Варіант: Гуртожиток)\n" +
+            "Студентка: Кучинська Софія\n" +
+            "Курс: 2 | Група: К28\n" +
+            "Рік: 2026\n\n" +
+            "Реалізовано: патерн Strategy (LINQ to XML, DOM, SAX), XSLT-трансформацію, каскадну фільтрацію та експорт результатів.",
+            "Зрозуміло");
+    }
+
+    public async void OnExitClicked(object sender, EventArgs e)
+    {
+        bool exit = await DisplayAlertAsync("Підтвердження", "Ви дійсно бажаєте вийти з програми?", "Так", "Ні");
+        if (exit) Application.Current?.Quit();
+    }
+}
