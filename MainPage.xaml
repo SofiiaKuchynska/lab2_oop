@@ -1,0 +1,138 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="XmlDormitoryApp.DormitoryView"
+             BackgroundColor="#F8FAFC"
+             Title="XML Диспетчер Гуртожитку">
+
+    <Grid RowDefinitions="Auto, Auto, Auto, *" Padding="16" RowSpacing="12">
+
+        <!-- 1. Верхня панель інструментів (FlexLayout з Wrap="Wrap") -->
+        <Border Grid.Row="0" Stroke="#E2E8F0" StrokeThickness="1" BackgroundColor="#FFFFFF" StrokeShape="RoundRectangle 12" Padding="12">
+            <FlexLayout Wrap="Wrap" JustifyContent="SpaceBetween" AlignItems="Center">
+                <HorizontalStackLayout Spacing="8">
+                    <Button Text="Відкрити XML" Clicked="OnSelectFileClicked" BackgroundColor="#E0E7FF" TextColor="#3730A3" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
+                    <Button Text="Зберегти XML" Clicked="OnSaveFilteredClicked" BackgroundColor="#D1FAE5" TextColor="#065F46" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
+                    <Button Text="В HTML (XSLT)" Clicked="OnTransformClicked" BackgroundColor="#E0E7FF" TextColor="#3730A3" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
+                    <Button Text="+ Додати запис" Clicked="OnAddStudentClicked" BackgroundColor="#D1FAE5" TextColor="#065F46" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
+                </HorizontalStackLayout>
+
+                <HorizontalStackLayout Spacing="8">
+                    <Button Text="Довідка" Clicked="OnAboutClicked" BackgroundColor="#FEF3C7" TextColor="#92400E" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
+                    <Button Text="Вийти" Clicked="OnExitClicked" BackgroundColor="#FEE2E2" TextColor="#991B1B" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
+                </HorizontalStackLayout>
+            </FlexLayout>
+        </Border>
+
+        <!-- 2. Картка пошуку та налаштувань Strategy -->
+        <Border Grid.Row="1" Stroke="#E2E8F0" StrokeThickness="1" BackgroundColor="#FFFFFF" StrokeShape="RoundRectangle 12" Padding="14">
+            <VerticalStackLayout Spacing="10">
+
+                <!-- Рядок вибору стратегії парсингу -->
+                <HorizontalStackLayout Spacing="16" VerticalOptions="Center">
+                    <Label Text="Парсер (Strategy):" FontAttributes="Bold" TextColor="#4C1D95" VerticalOptions="Center" FontSize="13" />
+                    <HorizontalStackLayout Spacing="4">
+                        <RadioButton x:Name="rbLinq" IsChecked="True" GroupName="ParserMethods" />
+                        <Label Text="LINQ to XML" VerticalOptions="Center" TextColor="#1E293B" FontSize="13"/>
+                    </HorizontalStackLayout>
+                    <HorizontalStackLayout Spacing="4">
+                        <RadioButton x:Name="rbDom" GroupName="ParserMethods" />
+                        <Label Text="DOM (XmlDocument)" VerticalOptions="Center" TextColor="#1E293B" FontSize="13"/>
+                    </HorizontalStackLayout>
+                    <HorizontalStackLayout Spacing="4">
+                        <RadioButton x:Name="rbSax" GroupName="ParserMethods" />
+                        <Label Text="SAX (XmlReader)" VerticalOptions="Center" TextColor="#1E293B" FontSize="13"/>
+                    </HorizontalStackLayout>
+                </HorizontalStackLayout>
+
+                <!-- Рядок фільтрації з підгрузкою наявних значень -->
+                <Grid ColumnDefinitions="160, 200, *, Auto, Auto" ColumnSpacing="8">
+                    <Picker x:Name="pickerAttribute"
+                        Title="Оберіть критерій"
+                        SelectedIndexChanged="OnAttributeChanged"
+                        TextColor="#0F172A"
+                        TitleColor="#64748B"
+                        BackgroundColor="#F1F5F9"
+                        FontSize="13">
+                        <Picker.Items>
+                            <x:String>ПІБ</x:String>
+                            <x:String>Факультет</x:String>
+                            <x:String>Курс</x:String>
+                            <x:String>Номер кімнати</x:String>
+                            <x:String>Кафедра</x:String>
+                            <x:String>Дата поселення</x:String>
+                        </Picker.Items>
+                    </Picker>
+                    <Picker x:Name="pickerSearchValue"
+                        Title="Наявні у файлі..."
+                        SelectedIndexChanged="OnSearchValuePicked"
+                        Grid.Column="1"
+                        TextColor="#0F172A"
+                        TitleColor="#64748B"
+                        BackgroundColor="#F1F5F9"
+                        FontSize="13" />
+                    <Entry x:Name="entrySearchValue" Placeholder="Або введіть значення..." Grid.Column="2" BackgroundColor="#F8FAFC" TextColor="#1E293B" FontSize="13" />
+                    <Button Text="Пошук" Clicked="OnSearchClicked" Grid.Column="3" BackgroundColor="#E0E7FF" TextColor="#3730A3" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
+                    <Button Text="Скинути" Clicked="OnClearClicked" Grid.Column="4" BackgroundColor="#FEE2E2" TextColor="#991B1B" FontAttributes="Bold" CornerRadius="8" HeightRequest="38" />
+                </Grid>
+
+                <!-- Рядок каскаду та лічильник -->
+                <Grid ColumnDefinitions="Auto, *" VerticalOptions="Center">
+                    <HorizontalStackLayout Spacing="6" VerticalOptions="Center">
+                        <CheckBox x:Name="cbCascade" IsChecked="False" Color="#3730A3" VerticalOptions="Center" />
+                        <Label Text="Шукати серед уже відфільтрованих результатів (каскад)" VerticalOptions="Center" TextColor="#475569" FontSize="12" />
+                    </HorizontalStackLayout>
+                    <Label x:Name="labelCount" Text="Записів: 0" Grid.Column="1" HorizontalOptions="End" FontAttributes="Bold" TextColor="#3730A3" FontSize="13" VerticalOptions="Center" />
+                </Grid>
+
+                <!-- Рядок активних фільтрів -->
+                <HorizontalStackLayout Spacing="6">
+                    <Label Text="Активні фільтри:" FontAttributes="Bold" TextColor="#64748B" FontSize="12" />
+                    <Label x:Name="labelActiveFilters" Text="Немає" TextColor="#2563EB" FontSize="12" />
+                </HorizontalStackLayout>
+            </VerticalStackLayout>
+        </Border>
+
+        <!-- 3. Шапка таблиці -->
+        <Border Grid.Row="2" Stroke="#E2E8F0" StrokeThickness="1" BackgroundColor="#EDE9FE" StrokeShape="RoundRectangle 8" Padding="12, 10">
+            <Grid ColumnDefinitions="2.2*, 1.4*, 0.8*, 1.1*, 1.6*, 1.2*">
+                <Label Text="ПІБ студента" FontAttributes="Bold" TextColor="#4C1D95" FontSize="13" Grid.Column="0" />
+                <Label Text="Факультет" FontAttributes="Bold" TextColor="#4C1D95" FontSize="13" Grid.Column="1" />
+                <Label Text="Курс" FontAttributes="Bold" TextColor="#4C1D95" FontSize="13" Grid.Column="2" />
+                <Label Text="Кімната" FontAttributes="Bold" TextColor="#4C1D95" FontSize="13" Grid.Column="3" />
+                <Label Text="Кафедра" FontAttributes="Bold" TextColor="#4C1D95" FontSize="13" Grid.Column="4" />
+                <Label Text="Дії" FontAttributes="Bold" TextColor="#4C1D95" FontSize="13" HorizontalOptions="Center" Grid.Column="5" />
+            </Grid>
+        </Border>
+
+        <!-- 4. Список записів (CollectionView) -->
+        <CollectionView x:Name="collectionStudents" Grid.Row="3" SelectionMode="None">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout Spacing="8" HorizontalOptions="Center" VerticalOptions="Center" Margin="0, 40">
+                    <Label Text="Записів не знайдено або файл ще не обрано" TextColor="#94A3B8" FontSize="14" HorizontalOptions="Center" />
+                    <Label Text="Натисніть «Відкрити XML», щоб розпочати роботу" TextColor="#CBD5E1" FontSize="12" HorizontalOptions="Center" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Border Stroke="#E2E8F0" StrokeThickness="1" BackgroundColor="#FFFFFF" StrokeShape="RoundRectangle 8" Padding="12, 8" Margin="0, 3">
+                        <Grid ColumnDefinitions="2.2*, 1.4*, 0.8*, 1.1*, 1.6*, 1.2*" VerticalOptions="Center">
+                            <Label Text="{Binding FullName}" FontAttributes="Bold" TextColor="#1E293B" FontSize="13" Grid.Column="0" VerticalOptions="Center" />
+                            <Label Text="{Binding Faculty}" TextColor="#2563EB" FontAttributes="Bold" FontSize="13" Grid.Column="1" VerticalOptions="Center" />
+                            <Label Text="{Binding Course}" TextColor="#475569" FontSize="13" Grid.Column="2" VerticalOptions="Center" />
+                            <Label Text="{Binding Room}" TextColor="#059669" FontAttributes="Bold" FontSize="13" Grid.Column="3" VerticalOptions="Center" />
+                            <Label Text="{Binding Department}" TextColor="#475569" FontSize="12" Grid.Column="4" VerticalOptions="Center" />
+
+                            <!-- Кнопки дій Ред. та Вид. -->
+                            <HorizontalStackLayout Grid.Column="5" Spacing="4" HorizontalOptions="Center" VerticalOptions="Center">
+                                <Button Text="Ред." Clicked="OnEditStudentClicked" CommandParameter="{Binding .}" BackgroundColor="#E0E7FF" TextColor="#3730A3" FontSize="11" CornerRadius="6" HeightRequest="28" Padding="6, 0" />
+                                <Button Text="Вид." Clicked="OnDeleteStudentClicked" CommandParameter="{Binding .}" BackgroundColor="#FEE2E2" TextColor="#991B1B" FontSize="11" CornerRadius="6" HeightRequest="28" Padding="6, 0" />
+                            </HorizontalStackLayout>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+    </Grid>
+</ContentPage>

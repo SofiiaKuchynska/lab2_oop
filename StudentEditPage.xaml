@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="XmlDormitoryApp.EditStudentPage"
+             Title="Картка мешканця"
+             BackgroundColor="#F8FAFC">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="12" MaximumWidthRequest="500">
+            <Label x:Name="PageHeaderLabel"
+                   Text="Редагування студента"
+                   FontSize="20"
+                   FontAttributes="Bold"
+                   TextColor="#1E293B"
+                   HorizontalOptions="Center" />
+
+            <Label Text="Прізвище, ім'я та по батькові:" TextColor="#64748B" FontSize="13" />
+            <Entry x:Name="FullNameEntry" Placeholder="Шевченко Тарас Григорович" TextColor="#0F172A" BackgroundColor="#FFFFFF" />
+
+            <Label Text="Факультет (ФКНК, ФРЕКС, ФІТ, ННІФ, геофак тощо):" TextColor="#64748B" FontSize="13" />
+            <Entry x:Name="FacultyEntry" Placeholder="ФКНК" TextColor="#0F172A" BackgroundColor="#FFFFFF" />
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                <VerticalStackLayout>
+                    <Label Text="Курс (1-6):" TextColor="#64748B" FontSize="13" />
+                    <Entry x:Name="CourseEntry" Placeholder="2" Keyboard="Numeric" TextColor="#0F172A" BackgroundColor="#FFFFFF" />
+                </VerticalStackLayout>
+                <VerticalStackLayout Grid.Column="1">
+                    <Label Text="Кімната (100-925):" TextColor="#64748B" FontSize="13" />
+                    <Entry x:Name="RoomEntry" Placeholder="506" Keyboard="Numeric" TextColor="#0F172A" BackgroundColor="#FFFFFF" />
+                </VerticalStackLayout>
+            </Grid>
+
+            <Label Text="Кафедра:" TextColor="#64748B" FontSize="13" />
+            <Entry x:Name="DeptEntry" Placeholder="Кафедра комп'ютерних наук" TextColor="#0F172A" BackgroundColor="#FFFFFF" />
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                <VerticalStackLayout>
+                    <Label Text="Дата поселення:" TextColor="#64748B" FontSize="13" />
+                    <Entry x:Name="CheckInEntry" Placeholder="2025-08-28" TextColor="#0F172A" BackgroundColor="#FFFFFF" />
+                </VerticalStackLayout>
+                <VerticalStackLayout Grid.Column="1">
+                    <Label Text="Дата виселення:" TextColor="#64748B" FontSize="13" />
+                    <Entry x:Name="CheckOutEntry" Placeholder="2027-06-30" TextColor="#0F172A" BackgroundColor="#FFFFFF" />
+                </VerticalStackLayout>
+            </Grid>
+
+            <!-- Кнопки дій -->
+            <VerticalStackLayout Spacing="8" Margin="0,15,0,0">
+                <Button Text="Зберегти"
+                        Clicked="OnSaveClicked"
+                        BackgroundColor="#D1FAE5"
+                        TextColor="#065F46"
+                        FontAttributes="Bold"
+                        CornerRadius="8"
+                        HeightRequest="42" />
+
+                <Button x:Name="DeleteBtn"
+                        Text="Видалити запис"
+                        Clicked="OnDeleteClicked"
+                        BackgroundColor="#FEE2E2"
+                        TextColor="#991B1B"
+                        FontAttributes="Bold"
+                        CornerRadius="8"
+                        HeightRequest="42" />
+
+                <Button Text="Скасувати"
+                        Clicked="OnCancelClicked"
+                        BackgroundColor="#F1F5F9"
+                        TextColor="#475569"
+                        CornerRadius="8"
+                        HeightRequest="42" />
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
