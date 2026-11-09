@@ -1,4 +1,4 @@
-﻿namespace XmlDormitoryApp;
+namespace XmlDormitoryApp;
 
 public class SearchCriteria
 {
@@ -15,7 +15,11 @@ public class SearchCriteria
     public bool Matches(Student student)
     {
         if (string.IsNullOrWhiteSpace(SearchValue)) return true;
-
+        if (AttributeName is "Course" or "Room")
+        {
+            int actual = AttributeName == "Course" ? student.Course : student.Room;
+            return int.TryParse(SearchValue.Trim(), out int expected) && actual == expected;
+        }
         string target = AttributeName switch
         {
             "FullName" => student.FullName,
